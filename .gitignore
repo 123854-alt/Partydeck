@@ -5,3 +5,4 @@ out/
 !.env.example
 coverage/
 *.tsbuildinfo
+data/lobbies.json*

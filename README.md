@@ -1,33 +1,49 @@
 # PartyDeck
 
-PartyDeck is a Next.js foundation for a shared game-night lobby. The current screen is a responsive Dutch/English front-end preview. Poker hand ranking and side-pot utilities are implemented as reusable TypeScript modules.
+PartyDeck is a shared game-night lobby built with Next.js and a single long-running Node.js server. It does not use a database. The server saves lobby snapshots in a JSON file and shares live updates over Socket.IO.
 
-## Current status
+## What works
 
-- Lobby creation/join screens, game catalog, language toggle, invite-code display, and responsive styling are present.
-- Poker evaluator covers all standard categories, ace-low straights, tie breakers, best-five selection, and side-pot construction.
-- The app is **not live multiplayer yet**. Lobby codes are generated in the browser; they do not create database sessions and cannot be joined from another device. Poker gameplay, dealing, betting, private-card delivery, and session settlement are not wired to a server.
-- UNO, Monopoly, and Guess the Impostor are explicitly marked as coming soon.
+- Create a lobby with a secure, random short code.
+- Join the same lobby from another device using its code or invitation link.
+- See the same player list, host, player limit, and approval status on connected devices.
+- Reconnect with a private HTTP-only guest-session cookie after refresh or a temporary disconnect.
+- Change the player limit as host; changing it clears everyone’s approvals.
+- Save lobbies to a JSON file. On a host with persistent disk, lobbies survive app restarts and expire after 48 hours without activity.
+- The poker hand evaluator is a separate module with focused unit tests.
+
+Poker betting and dealing, the end-of-night settlement, and the other games are not implemented yet. They are labelled as not playable in the UI. The lobby foundation is ready for those game modules.
 
 ## Run locally
 
 1. Install Node.js 20 or newer.
-2. Run `npm install`.
-3. Copy `.env.example` to `.env.local` if configuring Supabase.
-4. Run `npm run dev` and open http://localhost:3000.
+2. Run `npm ci`.
+3. Run `npm run dev` and open http://localhost:3000.
 
-The Supabase variables are optional for this preview. The client variable names follow the current Supabase Next.js setup (`NEXT_PUBLIC_SUPABASE_URL` and a publishable/anon public key); never put a service-role key in a `NEXT_PUBLIC_` variable. See [Supabase's Next.js setup guide](https://supabase.com/docs/guides/auth/quickstarts/nextjs).
+The local state file is `data/lobbies.json` and is ignored by Git. Set `PARTYDECK_STATE_FILE` to choose a different path and `PORT` to change the listening port.
 
-## Supabase foundation
+## Deploy
 
-The initial schema is in `supabase/migrations/202610120001_partydeck_foundation.sql`. Apply it with the Supabase CLI from this project after linking your Supabase project, or paste its contents into the SQL editor. The schema enables RLS and denies browser-role table access by default. A trusted API/Edge Function layer must be implemented before exposing lobby queries or actions. Reconnect tokens must be random, returned only once, stored as hashes, and checked server-side. Private poker cards belong only in the private schema and must be delivered through an authenticated per-player server response, never public Realtime payloads.
+PartyDeck now needs a single long-running Node.js server. The current Vercel serverless deployment cannot host this in-memory Socket.IO room manager and share its state reliably across separate function instances. Deploy this repository to a single-instance Node host instead; `railway.json` configures the build, start command, and health check for Railway.
 
-For a production multiplayer release, implement transactional server operations for lobby creation/join, approval revisions, poker actions and pot settlement; authorize every request using reconnect credentials; publish sanitized public snapshots; and send only the requesting player's cards to their device. Configure Supabase Realtime only for those sanitized snapshots.
+For state to survive a restart or redeploy, attach persistent disk storage to the host and set:
 
-## Vercel
+```text
+PARTYDECK_STATE_FILE=/data/lobbies.json
+```
 
-Import the repository in Vercel, select the Next.js framework preset, set the required environment variables for the server integration, and deploy. Do not call multiplayer operational until the backend endpoints, RLS policies, reconnect checks, and cross-device flows have been configured and verified.
+Keep the service to one running instance. Multiple instances do not share the JSON file or live Socket.IO rooms. This is the tradeoff for avoiding a database/Redis. Back up the volume if lobby history matters.
+
+The deploy command is `npm start`; the server listens on the host-provided `PORT`. The built-in health check is `/api/health`.
+
+## Security and limitations
+
+- Guest tokens are generated with cryptographic randomness, stored only as SHA-256 hashes in the state file, and delivered in `HttpOnly`, `SameSite=Lax` cookies.
+- All lobby mutations are validated by the server. The public snapshot omits reconnect-token hashes.
+- Only same-origin Socket.IO connections are accepted.
+- This app does not process payments or real-money transactions.
+- A single JSON file is suitable for a small game night, not a large multi-instance production service. File storage is not a database: writes are local to the server’s attached volume and there is no cross-region replication.
 
 ## Checks
 
-`npm run typecheck`, `npm test`, and `npm run build` are the intended checks. Test cases currently target hand categories, wheel straights, kicker comparison, and side-pot eligibility. More poker betting-engine and browser multiplayer tests remain necessary before accepting real games.
+Run `npm run typecheck`, `npm test`, `npm run lint`, and `npm run build`. Tests cover hand ranking helpers and shared lobby creation, joins, persistence, approvals, and capacity rules.

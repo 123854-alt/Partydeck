@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {buildSidePots,compareHands,evaluateFive,type Card} from './poker';
+import {bestHand,buildSidePots,compareHands,evaluateFive,type Card} from './poker';
 const cards=(rows:[number,Card['suit']][]):Card[]=>rows.map(([rank,suit])=>({rank,suit}));
 describe('Texas Hold’em hand evaluator',()=>{
  it('recognizes each standard category including a named royal flush',()=>{
@@ -19,6 +19,12 @@ describe('Texas Hold’em hand evaluator',()=>{
  it('handles the ace-low wheel and kicker tie breakers',()=>{
   expect(evaluateFive(cards([[14,'♠'],[2,'♦'],[3,'♣'],[4,'♥'],[5,'♠']])).kickers).toEqual([5]);
   expect(compareHands(evaluateFive(cards([[14,'♠'],[14,'♦'],[13,'♣'],[8,'♥'],[2,'♠']])),evaluateFive(cards([[13,'♠'],[13,'♦'],[14,'♣'],[8,'♥'],[2,'♠']])))).toBeGreaterThan(0);
+ });
+ it('selects the best five-card combination from seven cards',()=>{
+  const hand=bestHand(cards([[14,'♠'],[14,'♦'],[14,'♣'],[14,'♥'],[13,'♠'],[13,'♦'],[2,'♣']]));
+  expect(hand.name).toBe('Four of a kind');
+  expect(hand.kickers).toEqual([14,13]);
+  expect(evaluateFive(cards([[9,'♥'],[8,'♥'],[7,'♥'],[6,'♥'],[5,'♥']])).name).toBe('Straight flush');
  });
  it('builds side pots and excludes folded players from eligibility',()=>{
   expect(buildSidePots([{playerId:'a',amount:100},{playerId:'b',amount:50},{playerId:'c',amount:20}],['c'])).toEqual([
